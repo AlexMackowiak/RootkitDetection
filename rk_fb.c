@@ -21,10 +21,6 @@ int main() {
 			} 
 		}
 
-		if(i % 1000 == 0) {
-			printf("%d child processes created", i);
-		}
-
 		if (child_pid != 0) {
 			// Parent
 			int status;
@@ -33,6 +29,9 @@ int main() {
 			break;
 		} else {
 			//printf("Child with %d created\n", getpid());
+			if(i % 1000 == 0) {
+				printf("%d child processes created\n", i);
+			}
 		}
 	}
 
