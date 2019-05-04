@@ -6,7 +6,7 @@
 #include <signal.h>
 #include <stdlib.h>
 
-#define NUM_CHILDREN 200
+#define NUM_CHILDREN 10000
 
 volatile sig_atomic_t stopChildren;
 void handleChildSignal(int signal) {
@@ -28,10 +28,12 @@ int main() {
 			if (errno == EAGAIN) {
 				// Some other error
 				printf("EAGAIN\n");
+				break;
 			}
 			if (errno == ENOMEM) {
 				// That's the money
 				printf("ENOMEM\n");
+				break;
 			} 
 		}
 
@@ -54,7 +56,8 @@ int main() {
 	if(is_parent) {
 		int status;
 		for(i = 0; i < NUM_CHILDREN; i++) {	
-			kill(child_pids[i], SIGUSR1);
+			//kill(child_pids[i], SIGUSR1);
+			//kill(child_pids[i], SIGINT);
 			waitpid(child_pids[i], &status, 0);
 		}
 		free(child_pids);
