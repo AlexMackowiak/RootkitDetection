@@ -1,0 +1,4 @@
+gcc rk_fb_parent.c
+./a.out &
+./a.out &
+./a.out &
