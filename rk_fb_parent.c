@@ -8,7 +8,7 @@
 #include <sys/mman.h>
 
 #define NUM_CHILDREN_PER_CYCLE 100
-#define NUM_CYCLES 200
+#define NUM_CYCLES 100
 #define NUM_CHILDREN (NUM_CHILDREN_PER_CYCLE * NUM_CYCLES)
 
 static int* numPausedInCycle;
@@ -16,13 +16,13 @@ static int* numPausedInCycle;
 int main() {
 	numPausedInCycle = mmap(NULL, sizeof(*numPausedInCycle), PROT_READ | PROT_WRITE,
 							MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-	pid_t* child_pids = (pid_t*) calloc(NUM_CHILDREN, sizeof(pid_t));
+	//pid_t* child_pids = (pid_t*) calloc(NUM_CHILDREN, sizeof(pid_t));
 	
 	int i;
 	for(i = 0; i < NUM_CYCLES; i++) {
 		int j;
 		for(j = 0; j < NUM_CHILDREN_PER_CYCLE; j++) {
-			int childIndex = (i * NUM_CHILDREN_PER_CYCLE + j);
+			//int childIndex = (i * NUM_CHILDREN_PER_CYCLE + j);
 			pid_t child_pid = fork();
 
 			if (child_pid == -1) {
@@ -41,7 +41,7 @@ int main() {
 
 			if (child_pid != 0) {
 				//printf("Child created with pid: %d\n", child_pid);
-				child_pids[childIndex] = child_pid;
+				//child_pids[childIndex] = child_pid;
 			} else {
 				//if(j == (NUM_CHILDREN_PER_CYCLE - 1)) {
 					// Last child in this cycle
@@ -61,12 +61,13 @@ int main() {
 		//printf("Next cycle\n");
 	}
 
-	int status;
+	/*int status;
 	for(i = 0; i < NUM_CHILDREN; i++) {	
 		waitpid(child_pids[i], &status, 0);
-	}
+	}*/
+	pause();
 	munmap(numPausedInCycle, sizeof(*numPausedInCycle));
-	free(child_pids);
+	//free(child_pids);
 
 	return 0;
 }
