@@ -9,6 +9,7 @@
 #define TARGET_TOTAL_PROCESSES 5000
 #define NUM_CHILDREN_PER_CYCLE 100
 
+// Returns the total number of non-hidden processes running, including this program
 int getProcessCount() {
 	DIR* procDirectory = opendir("/proc");
 
@@ -82,6 +83,7 @@ int main() {
 		for (j = 0; j < NUM_CHILDREN_PER_CYCLE; j++) {
 			int childCreated = createAndPauseChild();
 			if (!childCreated) {
+				printf("Error encountered, please SIGINT this program and try again\n");
 				goto fail;
 			}
 		}
@@ -96,13 +98,22 @@ int main() {
 		for (i = 0; i < numLeftoverNeeded; i++) {
 			int childCreated = createAndPauseChild();
 			if (!childCreated) {
+				printf("Error encountered, please SIGINT this program and try again\n");
 				goto fail;
 			}
 		}
 		while (*numPausedInCycle < numLeftoverNeeded);
 		*numPausedInCycle = 0;
 	}
+
+	// Verify we actually reached the target number of processes
+	currentNumProcesses = getProcessCount();
 	printf("Total number of processes should now be: %d\n", TARGET_TOTAL_PROCESSES);
+	printf("Actual number of non-hidden processes: %d\n", currentNumProcesses);
+	if (currentNumProcesses != TARGET_TOTAL_PROCESSES) {
+		printf("Another process may have started while running this program\n");
+		goto fail;
+	}
 
 fail:
 	pause();
