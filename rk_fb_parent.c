@@ -1,15 +1,13 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
-#include <sys/wait.h>
-#include <sys/types.h>
-#include <signal.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <dirent.h>
+#include <ctype.h>
 
 #define NUM_CHILDREN_PER_CYCLE 50
 #define NUM_CYCLES 180
-#define NUM_CHILDREN (NUM_CHILDREN_PER_CYCLE * NUM_CYCLES)
 
 int getProcessCount() {
 	DIR* procDirectory = opendir("/proc");
