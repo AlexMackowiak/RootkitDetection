@@ -99,7 +99,7 @@ int main() {
 				goto fail;
 			}
 		}
-		while (*numPausedInCycle < NUM_CHILDREN_PER_CYCLE);
+		while (*numPausedInCycle < numLeftoverNeeded);
 		*numPausedInCycle = 0;
 	}
 	printf("Total number of processes should now be: %d\n", TARGET_TOTAL_PROCESSES);
