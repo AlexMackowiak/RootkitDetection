@@ -1,1 +1,5 @@
-kill -9 $(pgrep -f ".*" | awk '$1>50')
+kill_targets=($(pgrep -vf "login|bash|kill" | awk '$1>50'))
+for kill_target in "${kill_targets[@]}"
+do
+	kill -9 "$kill_target"
+done
