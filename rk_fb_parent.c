@@ -7,7 +7,7 @@
 #include <ctype.h>
 
 #define NUM_CHILDREN_PER_CYCLE 50
-#define NUM_CYCLES 180
+#define NUM_CYCLES 50
 
 int getProcessCount() {
 	DIR* procDirectory = opendir("/proc");
@@ -36,30 +36,30 @@ int getProcessCount() {
 static int* numPausedInCycle;
 
 int main() {
+	// Create shared memory so child processes can report to parent
 	numPausedInCycle = mmap(NULL, sizeof(*numPausedInCycle), PROT_READ | PROT_WRITE,
 							MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-	
+
 	int i;
+	int j;
 	for(i = 0; i < NUM_CYCLES; i++) {
-		int j;
 		for(j = 0; j < NUM_CHILDREN_PER_CYCLE; j++) {
 			pid_t child_pid = fork();
 
 			if (child_pid == -1) {
-				// Shit went down
 				if (errno == EAGAIN) {
-					// Some other error
-					printf("EAGAIN\n");
+					printf("EAGAIN encountered too early, very suspicious\n");
 					break;
 				}
 				if (errno == ENOMEM) {
-					// That's the money
-					printf("ENOMEM\n");
+					// I have absolutely no idea how to even cause this
+					printf("System ran out of memory before fork() could finish\n");
 					break;
 				} 
 			}
 
 			if (child_pid == 0) {
+				// This is the child process
 				*numPausedInCycle += 1;
 				pause();
 				exit(0);
