@@ -168,11 +168,13 @@ int main() {
 		*numPausedInCycle = 0;
 		printf("%d child processes created and paused\n", (i + 1) * NUM_CHILDREN_PER_CYCLE);
 	}
+	printf("Cycles done\n");
 
 	// How many processes are still not made after the last cycle?
 	int numLeftoverNeeded = TARGET_MAX_PID - getProcessCount();
 
 	// Handle making leftover processes
+	int numLeftovers = 0;
 	while (getProcessCount() < TARGET_MAX_PID) {
 		int childCreated = createAndPauseChild();
 		if (!childCreated) {
@@ -182,6 +184,8 @@ int main() {
 
 		while (*numPausedInCycle < 1);
 		*numPausedInCycle = 0;
+		printf("CHILD CREATED: %d\n", numLeftovers);
+		numLeftovers++;
 	}
 
 	// Verify we actually reached the target number of processes
@@ -194,11 +198,11 @@ int main() {
 	}
 
 	// Modify the max process ID such that one more fork() call would hopefully reveal an issue
-	int prev_max_pid = setMaxPid(TARGET_MAX_PID - 300);
-	if (prev_max_pid < 0) {
-		printf("Problem encountered setting pid_max\n");
-		goto fail;
-	}
+	//int prev_max_pid = setMaxPid(TARGET_MAX_PID - 500);
+	//if (prev_max_pid < 0) {
+	//	printf("Problem encountered setting pid_max\n");
+	//	goto fail;
+	//}
 
 	// One last verfication that no extra process spawned to mess things up
 	int processCount = getProcessCount();
@@ -233,6 +237,7 @@ int main() {
 	}
 
 	// Restore the pid_max value from before
+	int prev_max_pid = 32768;
 	setMaxPid(prev_max_pid);
 
 fail:
