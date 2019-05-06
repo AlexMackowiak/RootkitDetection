@@ -111,7 +111,40 @@ int main() {
 	printf("Total number of processes should now be: %d\n", TARGET_TOTAL_PROCESSES);
 	printf("Actual number of non-hidden processes: %d\n", currentNumProcesses);
 	if (currentNumProcesses != TARGET_TOTAL_PROCESSES) {
-		printf("Another process may have started while running this program\n");
+		printf("Another process may have started in the middle of running this program\n");
+		goto fail;
+	}
+
+	// Read the value of pid_max to restore it later
+	FILE* maxPidFile = fopen("/proc/sys/kernel/pid_max", "r");
+	if (!maxPidFile) {
+		printf("Could not read pid_max value");
+		goto fail;
+	}
+	char* maxPid = NULL;
+	size_t len = 0;
+	getline(&maxPid, &len, maxPidFile);
+	//printf("Read value: %s", maxPid);
+
+	// Modify the max process ID such that one more fork() call would hopefully reveal an issue
+	// Note to self: It's a security risk to use system() with root privileges
+	char lowerMaxPidCommand[40];
+	sprintf(lowerMaxPidCommand, "sysctl -w kernel.pid_max=%d", TARGET_TOTAL_PROCESSES + 1);
+	int commandResult = system(lowerMaxPidCommand);
+	if (commandResult != 0) {
+		printf("Problem encountered running \"%s\"\n", lowerMaxPidCommand);
+		goto fail;
+	}
+
+	// Make one more fork() call here
+
+
+	// Restore the pid_max value from before
+	char resetMaxPidCommand[40];
+	sprintf(resetMaxPidCommand, "sysctl -w kernel.pid_max=%s", maxPid);
+	commandResult = system(resetMaxPidCommand);
+	if (commandResult != 0) {
+		printf("Problem encountered running \"%s\"\n", resetMaxPidCommand);
 		goto fail;
 	}
 
