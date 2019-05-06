@@ -7,9 +7,43 @@
 #include <ctype.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <fcntl.h>
+#include <string.h>
+#include <sys/file.h>
 
-#define TARGET_TOTAL_PROCESSES 5000
+#define TARGET_TOTAL_PROCESSES 500
 #define NUM_CHILDREN_PER_CYCLE 100
+
+// Code heavily inspired by:
+// efiop-notes.blogspot.com/2014/06/how-to-set-pid-using-nslast-pid.html
+// Function sets the most likely next pid to be target_pid
+// I'm not certain this is guaranteed to be deterministic though
+// returns 1 on success, and 0 on failure at any point in the process
+int setNextPid(int target_pid) {
+    int last_pid_fd = open("/proc/sys/kernel/ns_last_pid", O_RDWR | O_CREAT, 0644);
+    if (last_pid_fd < 0) {
+        perror("Can't open ns_last_pid");
+        return 0;
+    }
+
+    if (flock(last_pid_fd, LOCK_EX)) {
+        close(last_pid_fd);
+        printf("Can't lock ns_last_pid\n");
+        return 0;
+    }
+
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%d", target_pid - 1);
+
+    if (write(last_pid_fd, buf, strlen(buf)) != strlen(buf)) {
+        printf("Error writing to buf\n");
+        return 0;
+    }
+    if (flock(last_pid_fd, LOCK_UN)) {
+        printf("Can't unlock");
+    }
+    close(last_pid_fd);
+}
 
 // Returns the total number of non-hidden processes running, including this program
 int getProcessCount() {
@@ -66,6 +100,10 @@ int createAndPauseChild() {
 }
 
 int main() {
+	// By setting the next PID to 2, fork() calls will start from that pid and count up
+	//  filling in gaps, even in pids reserved by the kernel (pid less than 300)
+	setNextPid(2);
+
 	// Create shared memory so child processes can report to parent
 	numPausedInCycle = mmap(NULL, sizeof(*numPausedInCycle), PROT_READ | PROT_WRITE,
 							MAP_SHARED | MAP_ANONYMOUS, -1, 0);
@@ -116,6 +154,9 @@ int main() {
 		printf("Another process may have started in the middle of running this program\n");
 		goto fail;
 	}
+
+	// REMOVE THIS LATER, testing earlier code for now
+	pause();
 
 	// Read the value of pid_max to restore it later
 	FILE* maxPidFile = fopen("/proc/sys/kernel/pid_max", "r");
