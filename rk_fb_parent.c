@@ -11,7 +11,7 @@
 #include <string.h>
 #include <sys/file.h>
 
-#define TARGET_TOTAL_PROCESSES 500
+#define TARGET_MAX_PID 500
 #define NUM_CHILDREN_PER_CYCLE 100
 
 // Code heavily inspired by:
@@ -109,13 +109,10 @@ int main() {
 							MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
 	int currentNumProcesses = getProcessCount();
-	int numProcessesToCreate = TARGET_TOTAL_PROCESSES - currentNumProcesses;
+	int numProcessesToCreate = TARGET_MAX_PID - currentNumProcesses;
 
 	// How many full cycles of process creation do we need to reach the target?
 	int numFullCreationCycles = numProcessesToCreate / NUM_CHILDREN_PER_CYCLE;
-
-	// How many processes are still not made after the last cycle?
-	int numLeftoverNeeded = numProcessesToCreate % NUM_CHILDREN_PER_CYCLE;
 
 	int i;
 	int j;
@@ -133,24 +130,26 @@ int main() {
 		printf("%d child processes created and paused\n", (i + 1) * NUM_CHILDREN_PER_CYCLE);
 	}
 
+	// How many processes are still not made after the last cycle?
+	int numLeftoverNeeded = TARGET_MAX_PID - getProcessCount();
+
 	// Handle making leftover processes
-	if (numLeftoverNeeded != 0) {
-		for (i = 0; i < numLeftoverNeeded; i++) {
-			int childCreated = createAndPauseChild();
-			if (!childCreated) {
-				printf("Error encountered, please SIGINT this program and try again\n");
-				goto fail;
-			}
+	while (getProcessCount() < TARGET_MAX_PID) {
+		int childCreated = createAndPauseChild();
+		if (!childCreated) {
+			printf("Error encountered, please SIGINT this program and try again\n");
+			goto fail;
 		}
-		while (*numPausedInCycle < numLeftoverNeeded);
+
+		while (*numPausedInCycle < 1);
 		*numPausedInCycle = 0;
 	}
 
 	// Verify we actually reached the target number of processes
 	currentNumProcesses = getProcessCount();
-	printf("Total number of processes should now be: %d\n", TARGET_TOTAL_PROCESSES);
+	printf("Total number of processes should now be: %d\n", TARGET_MAX_PID);
 	printf("Actual number of non-hidden processes: %d\n", currentNumProcesses);
-	if (currentNumProcesses != TARGET_TOTAL_PROCESSES) {
+	if (currentNumProcesses != TARGET_MAX_PID) {
 		printf("Another process may have started in the middle of running this program\n");
 		goto fail;
 	}
@@ -172,7 +171,7 @@ int main() {
 	// Note to self: It's a security risk to use system() with root privileges
 	char lowerMaxPidCommand[40];
 	//sprintf(lowerMaxPidCommand, "sysctl -w kernel.pid_max=%d", TARGET_TOTAL_PROCESSES + 1);
-	sprintf(lowerMaxPidCommand, "sysctl -w kernel.pid_max=%d", TARGET_TOTAL_PROCESSES - 100);
+	sprintf(lowerMaxPidCommand, "sysctl -w kernel.pid_max=%d", TARGET_MAX_PID);
 	int commandResult = system(lowerMaxPidCommand);
 	if (commandResult != 0) {
 		printf("Problem encountered running \"%s\"\n", lowerMaxPidCommand);
@@ -197,7 +196,7 @@ int main() {
 			pause();
 			exit(0);
 		}
-		printf("No hidden processes detected with PID below %d\n", TARGET_TOTAL_PROCESSES);
+		printf("No hidden processes detected with PID below %d\n", TARGET_MAX_PID);
 
 		// Need to kill this last child so a process ID exists to reset kernel.pid_max
 		kill(child_pid, SIGINT);
