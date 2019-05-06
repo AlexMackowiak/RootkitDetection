@@ -5,6 +5,8 @@
 #include <sys/mman.h>
 #include <dirent.h>
 #include <ctype.h>
+#include <signal.h>
+#include <sys/wait.h>
 
 #define TARGET_TOTAL_PROCESSES 5000
 #define NUM_CHILDREN_PER_CYCLE 100
@@ -118,26 +120,49 @@ int main() {
 	// Read the value of pid_max to restore it later
 	FILE* maxPidFile = fopen("/proc/sys/kernel/pid_max", "r");
 	if (!maxPidFile) {
-		printf("Could not read pid_max value");
+		printf("Could not read pid_max value\n");
 		goto fail;
 	}
 	char* maxPid = NULL;
 	size_t len = 0;
 	getline(&maxPid, &len, maxPidFile);
-	//printf("Read value: %s", maxPid);
 
 	// Modify the max process ID such that one more fork() call would hopefully reveal an issue
 	// Note to self: It's a security risk to use system() with root privileges
 	char lowerMaxPidCommand[40];
-	sprintf(lowerMaxPidCommand, "sysctl -w kernel.pid_max=%d", TARGET_TOTAL_PROCESSES + 1);
+	//sprintf(lowerMaxPidCommand, "sysctl -w kernel.pid_max=%d", TARGET_TOTAL_PROCESSES + 1);
+	sprintf(lowerMaxPidCommand, "sysctl -w kernel.pid_max=%d", TARGET_TOTAL_PROCESSES - 100);
 	int commandResult = system(lowerMaxPidCommand);
 	if (commandResult != 0) {
 		printf("Problem encountered running \"%s\"\n", lowerMaxPidCommand);
 		goto fail;
 	}
 
-	// Make one more fork() call here
+	// If there are no hidden processes with a PID below TARGET_TOTAL_PROCESSES, 
+	//  then in theory one last fork() call should succeed, otherwise it would need to be
+	//  assigned a PID above pid_max and should error with EAGAIN
+	pid_t child_pid = fork();
 
+	if (child_pid == -1) {
+		if (errno == EAGAIN) {
+			printf("EAGAIN indicates a hidden process with high certainty\n");
+		}
+		if (errno == ENOMEM) {
+			printf("System ran out of memory before fork() could finish, very strange\n");
+		}
+	} else {
+		if (child_pid == 0) {
+			// This is the child process
+			pause();
+			exit(0);
+		}
+		printf("No hidden processes detected with PID below %d\n", TARGET_TOTAL_PROCESSES);
+
+		// Need to kill this last child so a process ID exists to reset kernel.pid_max
+		kill(child_pid, SIGINT);
+		int status;
+		waitpid(child_pid, &status, 0);
+	}
 
 	// Restore the pid_max value from before
 	char resetMaxPidCommand[40];
