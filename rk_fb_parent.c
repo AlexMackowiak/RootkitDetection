@@ -11,7 +11,7 @@
 #include <string.h>
 #include <sys/file.h>
 
-#define TARGET_MAX_PID 500
+#define TARGET_MAX_PID 1000
 #define NUM_CHILDREN_PER_CYCLE 100
 
 // Code heavily inspired by:
@@ -36,13 +36,52 @@ int setNextPid(int target_pid) {
     snprintf(buf, sizeof(buf), "%d", target_pid - 1);
 
     if (write(last_pid_fd, buf, strlen(buf)) != strlen(buf)) {
-        printf("Error writing to buf\n");
+        printf("Error writing from buf\n");
         return 0;
     }
     if (flock(last_pid_fd, LOCK_UN)) {
-        printf("Can't unlock");
+        printf("Can't unlock\n");
     }
     close(last_pid_fd);
+}
+
+int setMaxPid(int newMax) {
+	// Open pid_max "file"
+	int max_pid_fd = open("/proc/sys/kernel/pid_max", O_RDWR | O_CREAT, 0644);
+	if (max_pid_fd < 0) {
+		perror("Error opening pid_max");
+		return -1;
+	}
+
+	// Lock the file, not sure if this is actually necessary here
+	if (flock(max_pid_fd, LOCK_EX)) {
+        close(max_pid_fd);
+        printf("Can't lock pid_max\n");
+        return -1;
+    }
+
+	// Store the previous value for later
+	char prev_val[32];
+	if (read(max_pid_fd, prev_val, 32) < 0) {
+		printf("Error reading pid_max file\n");
+		return -1;
+	}
+
+	// Write the new value and unlock the file
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%d", newMax);
+    if (write(max_pid_fd, buf, strlen(buf)) != strlen(buf)) {
+        printf("Error writing from buf\n");
+        return -1;
+    }
+    if (flock(max_pid_fd, LOCK_UN)) {
+        printf("Can't unlock\n");
+		return -1;
+    }
+
+	close(max_pid_fd);
+	printf("Max PID value is now: %d\n", newMax);
+	return atoi(prev_val);
 }
 
 // Returns the total number of non-hidden processes running, including this program
@@ -154,64 +193,47 @@ int main() {
 		goto fail;
 	}
 
-	// REMOVE THIS LATER, testing earlier code for now
-	pause();
-
-	// Read the value of pid_max to restore it later
-	FILE* maxPidFile = fopen("/proc/sys/kernel/pid_max", "r");
-	if (!maxPidFile) {
-		printf("Could not read pid_max value\n");
-		goto fail;
-	}
-	char* maxPid = NULL;
-	size_t len = 0;
-	getline(&maxPid, &len, maxPidFile);
-
 	// Modify the max process ID such that one more fork() call would hopefully reveal an issue
-	// Note to self: It's a security risk to use system() with root privileges
-	char lowerMaxPidCommand[40];
-	//sprintf(lowerMaxPidCommand, "sysctl -w kernel.pid_max=%d", TARGET_TOTAL_PROCESSES + 1);
-	sprintf(lowerMaxPidCommand, "sysctl -w kernel.pid_max=%d", TARGET_MAX_PID);
-	int commandResult = system(lowerMaxPidCommand);
-	if (commandResult != 0) {
-		printf("Problem encountered running \"%s\"\n", lowerMaxPidCommand);
+	int prev_max_pid = setMaxPid(TARGET_MAX_PID - 300);
+	if (prev_max_pid < 0) {
+		printf("Problem encountered setting pid_max\n");
 		goto fail;
 	}
 
-	// If there are no hidden processes with a PID below TARGET_TOTAL_PROCESSES, 
-	//  then in theory one last fork() call should succeed, otherwise it would need to be
-	//  assigned a PID above pid_max and should error with EAGAIN
-	pid_t child_pid = fork();
+	// One last verfication that no extra process spawned to mess things up
+	int processCount = getProcessCount();
+	if (processCount == TARGET_MAX_PID) {
+		// If there are no hidden processes with a PID below TARGET_MAX_PID,
+		//  then in theory one last fork() call should succeed, otherwise it would need to be
+		//  assigned a PID above pid_max and should error with EAGAIN
+		pid_t child_pid = fork();
 
-	if (child_pid == -1) {
-		if (errno == EAGAIN) {
-			printf("EAGAIN indicates a hidden process with high certainty\n");
-		}
-		if (errno == ENOMEM) {
-			printf("System ran out of memory before fork() could finish, very strange\n");
+		if (child_pid == -1) {
+			if (errno == EAGAIN) {
+				printf("EAGAIN indicates a hidden process with high certainty\n");
+			}
+			if (errno == ENOMEM) {
+				printf("System ran out of memory before fork() could finish, very strange\n");
+			}
+		} else {
+			if (child_pid == 0) {
+				// This is the child process
+				pause();
+				exit(0);
+			}
+			printf("No hidden processes detected with PID below %d\n", TARGET_MAX_PID);
+
+			// Need to kill this last child so a process ID exists to reset kernel.pid_max
+			kill(child_pid, SIGINT);
+			int status;
+			waitpid(child_pid, &status, 0);
 		}
 	} else {
-		if (child_pid == 0) {
-			// This is the child process
-			pause();
-			exit(0);
-		}
-		printf("No hidden processes detected with PID below %d\n", TARGET_MAX_PID);
-
-		// Need to kill this last child so a process ID exists to reset kernel.pid_max
-		kill(child_pid, SIGINT);
-		int status;
-		waitpid(child_pid, &status, 0);
+		printf("Process count is off (%d) before final fork(), please rerun\n", processCount);
 	}
 
 	// Restore the pid_max value from before
-	char resetMaxPidCommand[40];
-	sprintf(resetMaxPidCommand, "sysctl -w kernel.pid_max=%s", maxPid);
-	commandResult = system(resetMaxPidCommand);
-	if (commandResult != 0) {
-		printf("Problem encountered running \"%s\"\n", resetMaxPidCommand);
-		goto fail;
-	}
+	setMaxPid(prev_max_pid);
 
 fail:
 	pause();
