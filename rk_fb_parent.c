@@ -11,7 +11,7 @@
 #include <string.h>
 #include <sys/file.h>
 
-#define TARGET_MAX_PID 1000
+//#define TARGET_MAX_PID 1000
 #define NUM_CHILDREN_PER_CYCLE 100
 
 // Code heavily inspired by:
@@ -138,7 +138,14 @@ int createAndPauseChild() {
 	return 1;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+	if (argc != 2) {
+		printf("Need one argument for the target max pid value\n");
+		return 1;
+	}
+
+	int TARGET_MAX_PID = atoi(argv[1]);
+
 	// By setting the next PID to 2, fork() calls will start from that pid and count up
 	//  filling in gaps, even in pids reserved by the kernel (pid less than 300)
 	setNextPid(2);
@@ -206,6 +213,7 @@ int main() {
 
 	// One last verfication that no extra process spawned to mess things up
 	int processCount = getProcessCount();
+	printf("Process count: %d\n", processCount);
 	if (processCount == TARGET_MAX_PID) {
 		// If there are no hidden processes with a PID below TARGET_MAX_PID,
 		//  then in theory one last fork() call should succeed, otherwise it would need to be
