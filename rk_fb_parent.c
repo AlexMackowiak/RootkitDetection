@@ -143,7 +143,6 @@ int main(int argc, char* argv[]) {
 		printf("Need one argument for the target max pid value\n");
 		return 1;
 	}
-
 	int TARGET_MAX_PID = atoi(argv[1]);
 
 	// By setting the next PID to 2, fork() calls will start from that pid and count up
@@ -175,12 +174,8 @@ int main(int argc, char* argv[]) {
 		*numPausedInCycle = 0;
 		printf("%d child processes created and paused\n", (i + 1) * NUM_CHILDREN_PER_CYCLE);
 	}
-	printf("Cycles done\n");
 
-	// How many processes are still not made after the last cycle?
-	int numLeftoverNeeded = TARGET_MAX_PID - getProcessCount();
-
-	// Handle making leftover processes
+	// Handle making leftover processes if there aren't enough left for a full cycle
 	int numLeftovers = 0;
 	while (getProcessCount() < TARGET_MAX_PID) {
 		int childCreated = createAndPauseChild();
@@ -191,7 +186,6 @@ int main(int argc, char* argv[]) {
 
 		while (*numPausedInCycle < 1);
 		*numPausedInCycle = 0;
-		printf("CHILD CREATED: %d\n", numLeftovers);
 		numLeftovers++;
 	}
 
@@ -205,6 +199,8 @@ int main(int argc, char* argv[]) {
 	}
 
 	// Modify the max process ID such that one more fork() call would hopefully reveal an issue
+	// For reasons I cannot explain, modifying pid_max in C leads to strange behaviors
+	// This is why the below code is commented out, and run_script is needed for this to work
 	//int prev_max_pid = setMaxPid(TARGET_MAX_PID - 500);
 	//if (prev_max_pid < 0) {
 	//	printf("Problem encountered setting pid_max\n");
@@ -235,7 +231,7 @@ int main(int argc, char* argv[]) {
 			}
 			printf("No hidden processes detected with PID below %d\n", TARGET_MAX_PID);
 
-			// Need to kill this last child so a process ID exists to reset kernel.pid_max
+			// Might as well kill this last process just in case we need a free pid
 			kill(child_pid, SIGINT);
 			int status;
 			waitpid(child_pid, &status, 0);

@@ -1,3 +1,11 @@
-target_max_pid=1500
-sysctl -w kernel.pid_max=$((target_max_pid + 2))
+target_max_pid=600
+# The pid_max value is actually 1 greater than the maximum assignable pid
+# According to "man 5 proc" and my own experimentation
+corresponding_pid_max=$((target_max_pid + 2))
+
+# Set the maximum assignable pid to be target_max_pid + 1 such that spawning one more process with
+#  target_max_pid processes will hopefully reveal a hidden process based on if it errors
+sysctl -w kernel.pid_max=$corresponding_pid_max
+
+# Compile and run the actual fork bomb program
 gcc ./rk_fb_parent.c && ./a.out $target_max_pid
