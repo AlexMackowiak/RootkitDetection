@@ -14,6 +14,7 @@
 int setNextPid(int target_pid) {
     int last_pid_fd = open("/proc/sys/kernel/ns_last_pid", O_RDWR | O_CREAT, 0644);
     if (last_pid_fd < 0) {
+		printf("Cant' open ns_lastpid\n");
         perror("Can't open ns_last_pid");
         return 0;
     }
@@ -35,6 +36,8 @@ int setNextPid(int target_pid) {
         printf("Can't unlock");
     }
     close(last_pid_fd);
+
+	return 1;
 }
 
 int main(int argc, char *argv[]) {
