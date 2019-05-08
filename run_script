@@ -1,4 +1,4 @@
-target_max_pid=600
+target_max_pid=5000
 # The pid_max value is actually 1 greater than the maximum assignable pid
 # According to "man 5 proc" and my own experimentation
 corresponding_pid_max=$((target_max_pid + 2))

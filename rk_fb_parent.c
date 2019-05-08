@@ -11,7 +11,6 @@
 #include <string.h>
 #include <sys/file.h>
 
-//#define TARGET_MAX_PID 1000
 #define NUM_CHILDREN_PER_CYCLE 100
 
 // Code heavily inspired by:
@@ -107,6 +106,8 @@ int getProcessCount() {
 	}
 
 	return numProcesses;
+	// Simulate hidden process by returning 1 less than the true process count
+	//return numProcesses - 1;
 }
 
 static int* numPausedInCycle;
@@ -175,6 +176,7 @@ int main(int argc, char* argv[]) {
 		printf("%d child processes created and paused\n", (i + 1) * NUM_CHILDREN_PER_CYCLE);
 	}
 
+	printf("Making leftovers\n");
 	// Handle making leftover processes if there aren't enough left for a full cycle
 	int numLeftovers = 0;
 	while (getProcessCount() < TARGET_MAX_PID) {
@@ -185,9 +187,11 @@ int main(int argc, char* argv[]) {
 		}
 
 		while (*numPausedInCycle < 1);
+		printf("Child created %d\n", numLeftovers+1);
 		*numPausedInCycle = 0;
 		numLeftovers++;
 	}
+	printf("Cycles done\n");
 
 	// Verify we actually reached the target number of processes
 	currentNumProcesses = getProcessCount();
@@ -214,6 +218,7 @@ int main(int argc, char* argv[]) {
 		// If there are no hidden processes with a PID below TARGET_MAX_PID,
 		//  then in theory one last fork() call should succeed, otherwise it would need to be
 		//  assigned a PID above pid_max and should error with EAGAIN
+		printf("Forking last process\n");
 		pid_t child_pid = fork();
 
 		if (child_pid == -1) {
